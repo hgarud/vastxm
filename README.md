@@ -1,127 +1,72 @@
 # vastXM
 
-Tiny CLI wrapper over the [vast.ai](https://vast.ai) CLI for launching one-off GPU training jobs.
-
-`vastxm launch` provisions an on-demand GPU instance, ships your project code to it, runs a command you specify, copies artifacts back, and destroys the instance — all in one foreground command.
-
-## Why
-Manually running `vastai search offers ... | vastai create instance ... | vastai copy ... | ssh ... | vastai destroy ...` for every training run is tedious and error-prone (forgetting to destroy = ongoing GPU charges). `vastxm launch` does it in one line.
+Run a training job on a rented [vast.ai](https://vast.ai) GPU with one command. vastXM rents a GPU, ships your code to it, runs your command, copies the results back, and shuts the instance down so you stop paying.
 
 ## Install
 
-vastXM is a uv-managed Python package. The `vastai` CLI is bundled as a dependency — you don't need to install it separately.
-
 ```bash
-# 1. Install vastxm (editable, from the repo). This pulls in vastai too.
-cd vastXM
 uv tool install --editable .
-
-# 2. Authenticate vast.ai (optional — vastxm will prompt on first use)
-vastxm auth <your_key_from_https://cloud.vast.ai/manage-keys/>
 ```
 
-After install, `vastxm` is on your PATH. The bundled `vastai` is reachable via `vastxm vastai <args...>` (e.g. `vastxm vastai show user`). On the first command that needs the API, vastxm will prompt for your key if none is configured (set `VAST_API_KEY` or pre-run `vastxm auth` to skip the prompt in CI/scripts).
+## Authenticate
 
-## Quickstart
-
-From a project directory:
+Get your API key from <https://cloud.vast.ai/manage-keys/>, then:
 
 ```bash
-vastxm launch --gpu A100 --num-gpus 4 --max-price 1.80 --disk 100 \
-              --cmd 'deepspeed --num_gpus=4 train.py --config configs/nanochat_a100.yaml'
+vastxm auth <YOUR_API_KEY>
 ```
 
-What happens:
-1. Bundles the project as `.vastxm/bundle.tar.gz` (excludes `.git/`, `checkpoints/`, `logs/`, `*.pt`, etc.).
-2. Picks the cheapest matching offer.
-3. Creates the instance, waits for `running` (uses a public `pytorch:2.5.1-cuda12.4` image; installs `uv` in the onstart).
-4. `vastai copy`s the bundle, then over SSH does `tar xzf`, `uv sync`, then runs your `--cmd`.
-5. Streams output to your terminal *and* `./runs/<name>/train.log`.
-6. On exit (success, failure, or Ctrl+C): pulls `/workspace/<bundle_dirname>/output/` back to `./runs/<name>/`, then destroys the instance.
+## Launch a job
 
-Pass `--keep` to skip the destroy.
+From your project directory:
 
-## `vastxm.toml` (project defaults)
+```bash
+vastxm launch --gpu A100 --cmd 'python train.py'
+```
 
-Drop a `vastxm.toml` next to your training code so you don't have to repeat flags:
+vastXM will:
+
+1. Show you a list of available GPUs — pick one with **↑/↓ + Enter** (Enter alone takes the cheapest).
+2. Rent it, ship your code, run your command.
+3. Copy `/workspace/output/` back into `./runs/<run-name>/`.
+4. Destroy the instance.
+
+Add `--keep` if you want to leave the instance running afterwards.
+
+## Project defaults
+
+Drop a `vastxm.toml` in your project so you don't repeat flags:
 
 ```toml
 [defaults]
 gpu = "A100"
-num_gpus = 4
-max_price = 1.80
-disk = 100
-image = "vastai/base-image:auto"  # or pin a tag, e.g. "vastai/base-image:cuda-12.8.1-auto"
-bundle_root = "."
-exclude = ["checkpoints/", "logs/", "data/"]
-artifact_path = "/workspace/output"
-artifact_dest = "./runs"
+num_gpus = 1
+max_price = 1.80     # USD/hr ceiling
+disk = 100           # GB
 ```
 
-CLI flags override the toml; the toml overrides built-in defaults.
+## Common GPU names
 
-## CLI reference
+| Type | `--gpu` |
+|---|---|
+| A100 (any variant) | `A100` |
+| H100 (any variant) | `H100` |
+| H200 | `H200` |
+| RTX 5090 | `RTX_5090` |
+| RTX 4090 | `RTX_4090` |
+| L40S | `L40S` |
 
-| Command | What it does |
-|---------|--------------|
-| `vastxm launch --cmd '...' [flags]` | Full provision → run → destroy cycle. |
-| `vastxm ls` | List your active vast.ai instances. |
-| `vastxm logs <id>` | `tail -F` the remote `train.log`. |
-| `vastxm ssh <id>` | Open an interactive shell on the instance. |
-| `vastxm stop <id>` | Destroy an instance (alias for `vastai destroy instance`). |
-| `vastxm pull <id> <remote> <local>` | Run `vastai copy` to fetch files. |
-| `vastxm auth <key>` | One-time auth: writes the vast.ai API key via the bundled vastai. |
-| `vastxm vastai <args...>` | Passthrough to the bundled vastai CLI. |
+## Other commands
 
-`vastxm launch` flags:
-
-| Flag | Default | Notes |
-|------|---------|-------|
-| `--cmd` | (required) | The full command to run on the instance, e.g. `'deepspeed --num_gpus=4 train.py --config x.yaml'`. |
-| `--gpu` | `A100` | vast `gpu_name` filter. Examples: `RTX_4090`, `H100`, `A40`. |
-| `--num-gpus` | `1` | |
-| `--max-price` | `2.00` | USD/hr cap. |
-| `--disk` | `50` | GB. |
-| `--image` | `vastai/base-image:auto` | `:auto` resolves to the right `vastai/base-image:cuda-X.Y.Z-auto` tag for the chosen offer's `cuda_max_good`. Any other value (e.g. `pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime`) is used verbatim. |
-| `--bundle-root` | `.` | Directory tar'd into the bundle. |
-| `--exclude PAT` | (defaults) | Repeatable. **Replaces** the default exclude list when used; include defaults explicitly if you still want them. |
-| `--artifact-path` | `/workspace/output` | Remote dir copied back. |
-| `--artifact-dest` | `./runs` | Local dir for artifact + log output. |
-| `--name` | auto | Run label; controls the local run subdirectory. |
-| `--keep` | off | Skip destroy on exit. |
-| `--dry-run` | off | Print the plan; don't touch vastai. |
-| `--config-file` | `vastxm.toml` | Path to project defaults file. |
-
-## Troubleshooting
-
-- **`The bundled vastai CLI is missing`** → reinstall with `uv tool install --reinstall --editable .` from the vastxm repo.
-- **`No offers matched`** → raise `--max-price` or relax `--gpu`/`--num-gpus`. Run `vastai search offers '...'` directly to see what's available.
-- **`instance ... reached terminal status 'exited'`** → the host failed to start the container; usually a transient host issue. Re-run `vastxm launch`. Use `VASTXM_DEBUG=1` for raw vastai output.
-- **Stuck at `loading` for >15 min** → the image pull is too slow; pick a smaller image or a host with better bandwidth.
-- **Lost track of an instance** → `vastxm ls` then `vastxm stop <id>`.
-- **Want to debug remotely** → run with `--keep`, then `vastxm ssh <id>`.
-
-## Limitations (by design)
-
-- Single instance per launch — no multi-machine fan-out.
-- No Docker registry build/push step. We pull a public image and `uv sync` at startup.
-- No retry on host preemption — write your training to checkpoint regularly and re-run.
-- Bundle excludes are simple glob patterns; we do not parse `.gitignore`. Use `--exclude` or `vastxm.toml` to keep the bundle small.
-
-## Project layout
-
+```bash
+vastxm ls              # list your running instances
+vastxm ssh <id>        # open a shell on an instance
+vastxm logs <id>       # tail the running command's log
+vastxm stop <id>       # destroy an instance
 ```
-vastXM/
-├── pyproject.toml
-├── README.md                       ← you are here
-├── src/vastxm/
-│   ├── cli.py                      # argparse subcommands
-│   ├── config.py                   # LaunchConfig + vastxm.toml loader
-│   ├── vast.py                     # vastai CLI subprocess wrapper
-│   ├── bundle.py                   # tar.gz creation
-│   ├── instance.py                 # offer search, wait_for_running
-│   ├── ssh.py                      # SSH stream helper
-│   ├── workflow.py                 # launch orchestration
-│   └── _log.py
-└── tests/
-```
+
+## Tips
+
+- **Don't forget to stop instances.** vast.ai charges by the hour. `vastxm ls` to see what's still running, `vastxm stop <id>` to kill it.
+- **No offers found?** Raise `--max-price` or try a more common GPU.
+- **Flag reference:** `vastxm launch --help`.
