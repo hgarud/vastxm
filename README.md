@@ -25,7 +25,7 @@ After install, `vastxm` should be on your PATH.
 
 ## Quickstart
 
-From a project directory (e.g. `world_model/`):
+From a project directory:
 
 ```bash
 vastxm launch --gpu A100 --num-gpus 4 --max-price 1.80 --disk 100 \
@@ -113,7 +113,6 @@ CLI flags override the toml; the toml overrides built-in defaults.
 vastXM/
 ├── pyproject.toml
 ├── README.md                       ← you are here
-├── implementation-plans/            ← step-by-step build plan
 ├── src/vastxm/
 │   ├── cli.py                      # argparse subcommands
 │   ├── config.py                   # LaunchConfig + vastxm.toml loader
