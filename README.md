@@ -9,19 +9,18 @@ Manually running `vastai search offers ... | vastai create instance ... | vastai
 
 ## Install
 
-vastXM is a uv-managed Python package. The `vastai` CLI is a runtime requirement.
+vastXM is a uv-managed Python package. The `vastai` CLI is bundled as a dependency — you don't need to install it separately.
 
 ```bash
-# 1. Install the vast.ai CLI globally and authenticate
-pip install vastai
-vastai set api-key <your_key_from_https://cloud.vast.ai/manage-keys/>
-
-# 2. Install vastxm (editable, from the repo)
+# 1. Install vastxm (editable, from the repo). This pulls in vastai too.
 cd vastXM
 uv tool install --editable .
+
+# 2. Authenticate vast.ai (optional — vastxm will prompt on first use)
+vastxm auth <your_key_from_https://cloud.vast.ai/manage-keys/>
 ```
 
-After install, `vastxm` should be on your PATH.
+After install, `vastxm` is on your PATH. The bundled `vastai` is reachable via `vastxm vastai <args...>` (e.g. `vastxm vastai show user`). On the first command that needs the API, vastxm will prompt for your key if none is configured (set `VAST_API_KEY` or pre-run `vastxm auth` to skip the prompt in CI/scripts).
 
 ## Quickstart
 
@@ -52,7 +51,7 @@ gpu = "A100"
 num_gpus = 4
 max_price = 1.80
 disk = 100
-image = "pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime"
+image = "vastai/base-image:auto"  # or pin a tag, e.g. "vastai/base-image:cuda-12.8.1-auto"
 bundle_root = "."
 exclude = ["checkpoints/", "logs/", "data/"]
 artifact_path = "/workspace/output"
@@ -71,6 +70,8 @@ CLI flags override the toml; the toml overrides built-in defaults.
 | `vastxm ssh <id>` | Open an interactive shell on the instance. |
 | `vastxm stop <id>` | Destroy an instance (alias for `vastai destroy instance`). |
 | `vastxm pull <id> <remote> <local>` | Run `vastai copy` to fetch files. |
+| `vastxm auth <key>` | One-time auth: writes the vast.ai API key via the bundled vastai. |
+| `vastxm vastai <args...>` | Passthrough to the bundled vastai CLI. |
 
 `vastxm launch` flags:
 
@@ -81,7 +82,7 @@ CLI flags override the toml; the toml overrides built-in defaults.
 | `--num-gpus` | `1` | |
 | `--max-price` | `2.00` | USD/hr cap. |
 | `--disk` | `50` | GB. |
-| `--image` | `pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime` | Any public Docker image. |
+| `--image` | `vastai/base-image:auto` | `:auto` resolves to the right `vastai/base-image:cuda-X.Y.Z-auto` tag for the chosen offer's `cuda_max_good`. Any other value (e.g. `pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime`) is used verbatim. |
 | `--bundle-root` | `.` | Directory tar'd into the bundle. |
 | `--exclude PAT` | (defaults) | Repeatable. **Replaces** the default exclude list when used; include defaults explicitly if you still want them. |
 | `--artifact-path` | `/workspace/output` | Remote dir copied back. |
@@ -93,7 +94,7 @@ CLI flags override the toml; the toml overrides built-in defaults.
 
 ## Troubleshooting
 
-- **`The vastai CLI was not found on PATH`** → `pip install vastai` and confirm `which vastai`.
+- **`The bundled vastai CLI is missing`** → reinstall with `uv tool install --reinstall --editable .` from the vastxm repo.
 - **`No offers matched`** → raise `--max-price` or relax `--gpu`/`--num-gpus`. Run `vastai search offers '...'` directly to see what's available.
 - **`instance ... reached terminal status 'exited'`** → the host failed to start the container; usually a transient host issue. Re-run `vastxm launch`. Use `VASTXM_DEBUG=1` for raw vastai output.
 - **Stuck at `loading` for >15 min** → the image pull is too slow; pick a smaller image or a host with better bandwidth.

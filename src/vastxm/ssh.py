@@ -12,6 +12,16 @@ log = get_logger(__name__)
 
 _URL_RE = re.compile(r"^ssh://(?P<user>[^@]+)@(?P<host>[^:]+):(?P<port>\d+)/?$")
 
+# vast.ai recycles host:port across rentals, so any host key we cached from a
+# previous instance is stale. Don't read or write known_hosts for these probes —
+# it just trips StrictHostKeyChecking and breaks BatchMode probes silently.
+SSH_COMMON_OPTS = [
+    "-o", "StrictHostKeyChecking=no",
+    "-o", "UserKnownHostsFile=/dev/null",
+    "-o", "GlobalKnownHostsFile=/dev/null",
+    "-o", "LogLevel=ERROR",
+]
+
 
 @dataclass(frozen=True)
 class SshTarget:
@@ -31,7 +41,7 @@ def _ssh_argv(target: SshTarget, remote_cmd: str) -> list[str]:
     return [
         "ssh",
         "-p", str(target.port),
-        "-o", "StrictHostKeyChecking=accept-new",
+        *SSH_COMMON_OPTS,
         "-o", "ServerAliveInterval=30",
         f"{target.user}@{target.host}",
         "bash", "-lc", remote_cmd,

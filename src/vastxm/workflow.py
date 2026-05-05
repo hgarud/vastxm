@@ -40,7 +40,8 @@ def _print_dry_run(cfg: LaunchConfig, run_name: str, bundle_dirname: str) -> Non
     print("=== DRY RUN ===")
     print(f"name              : {run_name}")
     print(f"bundle_root       : {cfg.bundle_root}")
-    print(f"image             : {cfg.image}")
+    image_note = " (auto-resolved per offer's cuda_max_good)" if cfg.image == "vastai/base-image:auto" else ""
+    print(f"image             : {cfg.image}{image_note}")
     print(f"gpu / num_gpus    : {cfg.gpu} x {cfg.num_gpus}")
     print(f"max_price (USD/hr): {cfg.max_price}")
     print(f"disk (GB)         : {cfg.disk}")
@@ -74,10 +75,12 @@ def launch(cfg: LaunchConfig) -> int:
     bundle_path = bundle.create_bundle(bundle_root, excludes=cfg.exclude)
 
     instance.ensure_ssh_key()
-    offer_id = instance.pick_offer(cfg)
+    offer = instance.pick_offer(cfg)
+    offer_id = int(offer["id"])
+    image = instance.resolve_image(cfg.image, offer)
     created = vast.create_instance(
         offer_id,
-        image=cfg.image,
+        image=image,
         disk=cfg.disk,
         onstart_cmd=ONSTART_SCRIPT,
         ssh=True,
@@ -96,11 +99,15 @@ def launch(cfg: LaunchConfig) -> int:
     try:
         instance.wait_for_running(instance_id)
 
+        target = instance.resolve_ssh_target(instance_id)
+        log.info("waiting for sshd on %s:%s...", target.host, target.port)
+        instance.wait_for_ssh(target, instance_id=instance_id)
+        log.info("waiting for onstart_cmd to finish (uv install)...")
+        instance.wait_for_onstart(target)
+
         log.info("uploading bundle (%d KB)...", bundle_path.stat().st_size // 1024)
         vast.copy(f"local:{bundle_path}", f"{instance_id}:/workspace/bundle.tar.gz")
 
-        url = vast.ssh_url(instance_id)
-        target = ssh.SshTarget.parse(url)
         log_file = Path(cfg.artifact_dest) / run_name / "train.log"
         rc = ssh.run_remote_streaming(
             target,

@@ -5,10 +5,10 @@ import os
 import sys
 from pathlib import Path
 
-from vastxm import vast
+from vastxm import instance, vast
 from vastxm._log import get_logger
 from vastxm.config import merge_config
-from vastxm.ssh import SshTarget, run_remote_streaming
+from vastxm.ssh import SSH_COMMON_OPTS, run_remote_streaming
 from vastxm.vast import VastError
 from vastxm.workflow import launch
 
@@ -60,6 +60,15 @@ def _build_parser() -> argparse.ArgumentParser:
     pp.add_argument("remote_path")
     pp.add_argument("local_path")
 
+    # auth
+    pa = sub.add_parser("auth", help="set the vast.ai API key (one-time setup).")
+    pa.add_argument("key", help="API key from https://cloud.vast.ai/manage-keys/")
+
+    # vastai passthrough
+    pv = sub.add_parser("vastai", help="forward args to the bundled vastai CLI.")
+    pv.add_argument("vastai_args", nargs=argparse.REMAINDER,
+                    help="arguments passed verbatim, e.g. `vastxm vastai show user`.")
+
     return p
 
 
@@ -92,15 +101,15 @@ def _cmd_ls(_: argparse.Namespace) -> int:
 
 
 def _cmd_logs(args: argparse.Namespace) -> int:
-    target = SshTarget.parse(vast.ssh_url(args.instance_id))
+    target = instance.resolve_ssh_target(args.instance_id)
     return run_remote_streaming(target, "tail -F /workspace/train.log")
 
 
 def _cmd_ssh(args: argparse.Namespace) -> int:
-    target = SshTarget.parse(vast.ssh_url(args.instance_id))
+    target = instance.resolve_ssh_target(args.instance_id)
     argv = [
         "ssh", "-p", str(target.port),
-        "-o", "StrictHostKeyChecking=accept-new",
+        *SSH_COMMON_OPTS,
         f"{target.user}@{target.host}",
     ]
     os.execvp(argv[0], argv)  # never returns
@@ -118,6 +127,16 @@ def _cmd_pull(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_auth(args: argparse.Namespace) -> int:
+    vast.exec_passthrough(["set", "api-key", args.key])  # never returns
+    return 0  # unreachable
+
+
+def _cmd_vastai(args: argparse.Namespace) -> int:
+    vast.exec_passthrough(args.vastai_args or [])  # never returns
+    return 0  # unreachable
+
+
 _DISPATCH = {
     "launch": _cmd_launch,
     "ls": _cmd_ls,
@@ -125,13 +144,20 @@ _DISPATCH = {
     "ssh": _cmd_ssh,
     "stop": _cmd_stop,
     "pull": _cmd_pull,
+    "auth": _cmd_auth,
+    "vastai": _cmd_vastai,
 }
+
+
+_SKIP_AUTH = {"auth", "vastai"}
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.command not in _SKIP_AUTH and not getattr(args, "dry_run", False):
+            vast.ensure_authenticated()
         return _DISPATCH[args.command](args)
     except VastError as e:
         log.error("vastai error: %s", e)

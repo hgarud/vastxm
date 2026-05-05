@@ -4,7 +4,7 @@ import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-DEFAULT_IMAGE = "pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime"
+DEFAULT_IMAGE = "vastai/base-image:auto"
 DEFAULT_EXCLUDES = (
     ".git/", ".venv/", "__pycache__/", ".pytest_cache/",
     "checkpoints/", "logs/", "runs/",
