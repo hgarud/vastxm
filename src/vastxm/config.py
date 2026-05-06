@@ -1,8 +1,10 @@
-from __future__ import annotations
-
 import tomllib
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
+
+from vastxm._log import get_logger
+
+log = get_logger(__name__)
 
 DEFAULT_IMAGE = "vastai/base-image:auto"
 DEFAULT_EXCLUDES = (
@@ -55,14 +57,16 @@ def merge_config(*, cmd: str, toml_path: Path, cli_overrides: dict) -> LaunchCon
     toml = load_toml_defaults(toml_path)
     cli = {k: v for k, v in cli_overrides.items() if v is not None}
 
+    valid = {f.name for f in fields(base)} - {"cmd"}
+    unknown = sorted((toml.keys() | cli.keys()) - valid)
+    if unknown:
+        log.warning("ignoring unknown config keys: %s", ", ".join(unknown))
+
     merged: dict = {}
-    merged.update(toml)
-    merged.update(cli)
+    merged.update({k: v for k, v in toml.items() if k in valid})
+    merged.update({k: v for k, v in cli.items() if k in valid})
 
     if "exclude" in merged and isinstance(merged["exclude"], list):
         merged["exclude"] = tuple(merged["exclude"])
-
-    valid_fields = {f.name for f in base.__dataclass_fields__.values()} - {"cmd"}
-    merged = {k: v for k, v in merged.items() if k in valid_fields}
 
     return replace(base, **merged)

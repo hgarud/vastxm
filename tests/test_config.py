@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from vastxm.config import DEFAULT_IMAGE, LaunchConfig, merge_config
+from vastxm.config import DEFAULT_IMAGE, merge_config
 
 
 def test_defaults_only(tmp_path: Path):

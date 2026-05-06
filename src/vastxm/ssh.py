@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -9,8 +6,6 @@ from pathlib import Path
 from vastxm._log import get_logger
 
 log = get_logger(__name__)
-
-_URL_RE = re.compile(r"^ssh://(?P<user>[^@]+)@(?P<host>[^:]+):(?P<port>\d+)/?$")
 
 # vast.ai recycles host:port across rentals, so any host key we cached from a
 # previous instance is stale. Don't read or write known_hosts for these probes —
@@ -29,12 +24,19 @@ class SshTarget:
     host: str
     port: int
 
-    @classmethod
-    def parse(cls, url: str) -> "SshTarget":
-        m = _URL_RE.match(url.strip())
-        if not m:
-            raise ValueError(f"unexpected ssh-url: {url!r}")
-        return cls(user=m["user"], host=m["host"], port=int(m["port"]))
+
+def probe(target: SshTarget, remote_cmd: str, *, connect_timeout: int = 5) -> tuple[int, str]:
+    """Run a one-shot non-interactive ssh probe. Returns (returncode, stderr)."""
+    argv = [
+        "ssh", "-p", str(target.port),
+        *SSH_COMMON_OPTS,
+        "-o", f"ConnectTimeout={connect_timeout}",
+        "-o", "BatchMode=yes",
+        f"{target.user}@{target.host}",
+        remote_cmd,
+    ]
+    proc = subprocess.run(argv, capture_output=True, text=True)
+    return proc.returncode, proc.stderr.strip()
 
 
 def _ssh_argv(target: SshTarget, remote_cmd: str) -> list[str]:

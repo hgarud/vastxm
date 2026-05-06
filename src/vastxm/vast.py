@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import getpass
 import json
 import os
@@ -28,14 +26,22 @@ def _vastai_executable() -> str | None:
     return shutil.which("vastai")
 
 
-def ensure_installed() -> None:
-    if _vastai_executable() is None:
+def _require_vastai() -> str:
+    """Return the path to the vastai CLI, or raise VastError with install guidance."""
+    exe = _vastai_executable()
+    if exe is None:
         raise VastError(
             "The bundled `vastai` CLI is missing from the vastxm tool venv. "
             "Reinstall vastxm with `uv tool install --reinstall --editable .` "
             "from the vastxm repo, then authenticate via `vastxm vastai set api-key <key>` "
             "(or call the bundled binary directly)."
         )
+    return exe
+
+
+def ensure_installed() -> None:
+    """Raise VastError if the vastai CLI is missing."""
+    _require_vastai()
 
 
 def _api_key_path() -> Path:
@@ -44,13 +50,11 @@ def _api_key_path() -> Path:
 
 
 def _has_api_key() -> bool:
-    if os.environ.get("VAST_API_KEY"):
-        return True
-    if _api_key_path().exists():
-        return True
-    if (Path.home() / ".vast_api_key").exists():  # legacy
-        return True
-    return False
+    return bool(
+        os.environ.get("VAST_API_KEY")
+        or _api_key_path().exists()
+        or (Path.home() / ".vast_api_key").exists()  # legacy
+    )
 
 
 def ensure_authenticated() -> None:
@@ -70,9 +74,7 @@ def ensure_authenticated() -> None:
         raise VastError("aborted: no API key provided.") from None
     if not key:
         raise VastError("aborted: empty API key.")
-    exe = _vastai_executable()
-    if exe is None:
-        ensure_installed()  # raises
+    exe = _require_vastai()
     proc = subprocess.run([exe, "set", "api-key", key], capture_output=True, text=True)
     if proc.returncode != 0:
         raise VastError(
@@ -84,9 +86,7 @@ def ensure_authenticated() -> None:
 
 def _run(args: list[str], *, raw: bool = True, check: bool = True) -> str:
     """Invoke `vastai <args>` and return its stdout as a string."""
-    exe = _vastai_executable()
-    if exe is None:
-        ensure_installed()  # raises
+    exe = _require_vastai()
     cmd = [exe, *args]
     if raw and "--raw" not in cmd:
         cmd.append("--raw")
@@ -165,15 +165,5 @@ def copy(src: str, dst: str) -> None:
 
 def exec_passthrough(args: list[str]) -> NoReturn:
     """Replace this process with the bundled vastai, forwarding args verbatim."""
-    exe = _vastai_executable()
-    if exe is None:
-        ensure_installed()  # raises
+    exe = _require_vastai()
     os.execv(exe, [exe, *args])
-
-
-def ssh_url(instance_id: int) -> str:
-    """Return the ssh:// URL for an instance, e.g. ssh://root@host.example:12345"""
-    out = _run(["ssh-url", str(instance_id)], raw=False).strip()
-    if not out.startswith("ssh://"):
-        raise VastError(f"unexpected ssh-url output: {out!r}")
-    return out

@@ -4,7 +4,27 @@ version = "0.1.0"
 description = "Tiny CLI wrapper over vast.ai for launching one-off GPU training jobs."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Hrishi Garud" }]
+keywords = ["vast.ai", "gpu", "training", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Utilities",
+]
 dependencies = ["vastai", "rich"]
+
+[project.urls]
+Homepage = "https://github.com/hgarud/vastXM"
+Issues = "https://github.com/hgarud/vastXM/issues"
 
 [project.scripts]
 vastxm = "vastxm.cli:main"
@@ -17,9 +37,21 @@ build-backend = "hatchling.build"
 packages = ["src/vastxm"]
 
 [tool.uv.workspace]
-members = [
-    "test_env",
-]
+members = ["examples"]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = [
+    "E501",  # line length handled by formatter
+    "B008",  # call in argument default — fine for Path.home() patterns
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

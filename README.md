@@ -70,3 +70,17 @@ vastxm stop <id>       # destroy an instance
 - **Don't forget to stop instances.** vast.ai charges by the hour. `vastxm ls` to see what's still running, `vastxm stop <id>` to kill it.
 - **No offers found?** Raise `--max-price` or try a more common GPU.
 - **Flag reference:** `vastxm launch --help`.
+
+## Development
+
+```bash
+uv sync --group dev
+uv run pytest
+uv run ruff check src tests
+```
+
+A minimal sandbox project lives in `examples/` for end-to-end smoke tests.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

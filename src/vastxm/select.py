@@ -1,8 +1,8 @@
-from __future__ import annotations
-
 import sys
 import termios
 import tty
+from collections.abc import Callable
+from typing import Any
 
 from rich.console import Console, Group
 from rich.live import Live
@@ -12,49 +12,34 @@ from rich.text import Text
 DEFAULT_LIMIT = 20
 
 
-def _fmt_int(v) -> str:
+def _fmt(v: Any, fn: Callable[[Any], str], default: str = "?") -> str:
+    """Apply ``fn`` to ``v``, returning ``default`` if ``v`` is None or non-numeric."""
     if v is None:
-        return "?"
+        return default
     try:
-        return f"{int(v)}"
+        return fn(v)
     except (TypeError, ValueError):
-        return "?"
+        return default
 
 
-def _fmt_float(v, digits: int = 1) -> str:
-    if v is None:
-        return "?"
-    try:
-        return f"{float(v):.{digits}f}"
-    except (TypeError, ValueError):
-        return "?"
+def _fmt_int(v: Any) -> str:
+    return _fmt(v, lambda x: f"{int(x)}")
 
 
-def _fmt_price(v) -> str:
-    if v is None:
-        return "?"
-    try:
-        return f"${float(v):.3f}"
-    except (TypeError, ValueError):
-        return "?"
+def _fmt_float(v: Any, digits: int = 1) -> str:
+    return _fmt(v, lambda x: f"{float(x):.{digits}f}")
 
 
-def _fmt_ram_gb(mib) -> str:
-    if mib is None:
-        return "?"
-    try:
-        return f"{float(mib) / 1024:.0f}"
-    except (TypeError, ValueError):
-        return "?"
+def _fmt_price(v: Any) -> str:
+    return _fmt(v, lambda x: f"${float(x):.3f}")
 
 
-def _fmt_reliability(r) -> str:
-    if r is None:
-        return "?"
-    try:
-        return f"{float(r) * 100:.1f}%"
-    except (TypeError, ValueError):
-        return "?"
+def _fmt_ram_gb(mib: Any) -> str:
+    return _fmt(mib, lambda x: f"{float(x) / 1024:.0f}")
+
+
+def _fmt_reliability(r: Any) -> str:
+    return _fmt(r, lambda x: f"{float(x) * 100:.1f}%")
 
 
 def _build_table(offers: list[dict], selected_idx: int) -> Table:

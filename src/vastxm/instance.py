@@ -1,15 +1,12 @@
-from __future__ import annotations
-
 import socket
-import subprocess
 import time
 from pathlib import Path
 
-from vastxm import vast
+from vastxm import ssh, vast
 from vastxm._log import get_logger
 from vastxm.config import LaunchConfig
 from vastxm.select import choose_offer
-from vastxm.ssh import SSH_COMMON_OPTS, SshTarget
+from vastxm.ssh import SshTarget
 
 log = get_logger(__name__)
 
@@ -162,11 +159,9 @@ def resolve_ssh_target(instance_id: int, *, timeout_s: int = 600, poll_s: int = 
     `ssh<N>.vast.ai` proxy — the proxy uses a reverse tunnel that's slow to program and often
     leaves the port refusing connections for minutes.
     """
-    from vastxm import vast as _vast  # local import to avoid cycle in test fixtures
-
     deadline = time.time() + timeout_s
     while time.time() < deadline:
-        info = _vast.show_instance(instance_id)
+        info = vast.show_instance(instance_id)
         target = _extract_direct_target(info)
         if target is not None:
             log.info("using direct SSH target %s:%s", target.host, target.port)
@@ -259,20 +254,12 @@ def wait_for_ssh(
             time.sleep(poll_s)
             continue
         # TCP open — confirm SSH is actually serving by running a no-op.
-        argv = [
-            "ssh", "-p", str(target.port),
-            *SSH_COMMON_OPTS,
-            "-o", "ConnectTimeout=5",
-            "-o", "BatchMode=yes",
-            f"{target.user}@{target.host}",
-            "true",
-        ]
-        proc = subprocess.run(argv, capture_output=True, text=True)
-        if proc.returncode == 0:
+        rc, stderr = ssh.probe(target, "true")
+        if rc == 0:
             log.info("ssh on %s:%s is ready (after %ds)", target.host, target.port, elapsed)
             return
-        last_err = RuntimeError(proc.stderr.strip() or f"ssh probe rc={proc.returncode}")
-        log.debug("ssh probe failed (rc=%s): %s", proc.returncode, last_err)
+        last_err = RuntimeError(stderr or f"ssh probe rc={rc}")
+        log.debug("ssh probe failed (rc=%s): %s", rc, last_err)
         time.sleep(poll_s)
     raise TimeoutError(
         f"ssh on {target.host}:{target.port} not ready within {timeout_s}s "
@@ -285,19 +272,11 @@ def wait_for_onstart(target: SshTarget, *, timeout_s: int = 600, poll_s: int = 5
     deadline = time.time() + timeout_s
     last_err: str | None = None
     while time.time() < deadline:
-        argv = [
-            "ssh", "-p", str(target.port),
-            *SSH_COMMON_OPTS,
-            "-o", "ConnectTimeout=5",
-            "-o", "BatchMode=yes",
-            f"{target.user}@{target.host}",
-            "test -f /root/.local/bin/env",
-        ]
-        proc = subprocess.run(argv, capture_output=True, text=True)
-        if proc.returncode == 0:
+        rc, stderr = ssh.probe(target, "test -f /root/.local/bin/env")
+        if rc == 0:
             log.info("onstart finished: uv is installed")
             return
-        last_err = proc.stderr.strip() or f"rc={proc.returncode}"
+        last_err = stderr or f"rc={rc}"
         log.debug("onstart probe not ready: %s", last_err)
         time.sleep(poll_s)
     raise TimeoutError(
