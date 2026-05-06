@@ -17,6 +17,23 @@ DEFAULT_PUBKEY_PATHS = (
 )
 
 
+def _pubkey_id(text: str) -> str:
+    """Normalize an OpenSSH pubkey to algo+base64, dropping comment and whitespace."""
+    parts = text.strip().split()
+    return f"{parts[0]} {parts[1]}" if len(parts) >= 2 else text.strip()
+
+
+def _local_keypairs() -> list[tuple[Path, Path, str]]:
+    """Return (privkey, pubkey, normalized_pubkey_id) for each local default key whose
+    pubkey AND matching private key both exist."""
+    out = []
+    for pub in DEFAULT_PUBKEY_PATHS:
+        priv = pub.with_suffix("")
+        if pub.exists() and priv.exists():
+            out.append((priv, pub, _pubkey_id(pub.read_text())))
+    return out
+
+
 # vast.ai's `gpu_name` field stores variant-suffixed values (e.g. "A100 SXM4",
 # "H100 SXM"), not bare family names. The search query language uses underscores
 # instead of spaces, so the *queryable* tokens are A100_SXM4, H100_SXM, etc.
@@ -135,7 +152,7 @@ def resolve_image(image: str, offer: dict) -> str:
     return resolved
 
 
-def _extract_direct_target(info: dict) -> SshTarget | None:
+def _extract_direct_target(info: dict, identity: Path | None = None) -> SshTarget | None:
     """Pull the direct ssh endpoint out of a `show_instance` response, or None if not yet populated."""
     public_ip = (info.get("public_ipaddr") or "").strip()
     mapping = (info.get("ports") or {}).get("22/tcp") or []
@@ -147,10 +164,16 @@ def _extract_direct_target(info: dict) -> SshTarget | None:
         return None
     if not host_port:
         return None
-    return SshTarget(user="root", host=public_ip, port=host_port)
+    return SshTarget(user="root", host=public_ip, port=host_port, identity=identity)
 
 
-def resolve_ssh_target(instance_id: int, *, timeout_s: int = 600, poll_s: int = 5) -> SshTarget:
+def resolve_ssh_target(
+    instance_id: int,
+    *,
+    identity: Path | None = None,
+    timeout_s: int = 600,
+    poll_s: int = 5,
+) -> SshTarget:
     """Poll vast.ai until the direct SSH host:port mapping is populated, then return it.
 
     `--direct` allocates a real port on the host (`public_ipaddr` + `ports["22/tcp"][0].HostPort`)
@@ -162,7 +185,7 @@ def resolve_ssh_target(instance_id: int, *, timeout_s: int = 600, poll_s: int = 
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         info = vast.show_instance(instance_id)
-        target = _extract_direct_target(info)
+        target = _extract_direct_target(info, identity=identity)
         if target is not None:
             log.info("using direct SSH target %s:%s", target.host, target.port)
             return target
@@ -235,6 +258,7 @@ def wait_for_ssh(
     deadline = start + timeout_s
     last_err: Exception | None = None
     last_heartbeat = 0.0
+    announced_key_wait = False
 
     while time.time() < deadline:
         elapsed = int(time.time() - start)
@@ -259,6 +283,17 @@ def wait_for_ssh(
             log.info("ssh on %s:%s is ready (after %ds)", target.host, target.port, elapsed)
             return
         last_err = RuntimeError(stderr or f"ssh probe rc={rc}")
+        # vast.ai injects the user's registered pubkey into authorized_keys
+        # AFTER the container reports running, typically within ~30s. Until
+        # then sshd is up but rejects auth. Surface this once at INFO so it
+        # doesn't read like a misconfiguration.
+        if "Permission denied (publickey)" in stderr and not announced_key_wait:
+            log.info(
+                "sshd up on %s:%s but auth not ready yet — "
+                "waiting for vast.ai to inject your registered ssh key (usually 5–30s)",
+                target.host, target.port,
+            )
+            announced_key_wait = True
         log.debug("ssh probe failed (rc=%s): %s", rc, last_err)
         time.sleep(poll_s)
     raise TimeoutError(
@@ -285,18 +320,45 @@ def wait_for_onstart(target: SshTarget, *, timeout_s: int = 600, poll_s: int = 5
     )
 
 
-def ensure_ssh_key() -> None:
-    """If the user has no ssh keys registered with vast, upload their local ed25519 / rsa pubkey."""
-    keys = vast.show_ssh_keys()
-    if keys:
-        log.debug("vast already has %d ssh key(s) registered", len(keys))
-        return
-    for p in DEFAULT_PUBKEY_PATHS:
-        if p.exists():
-            log.info("registering local ssh key with vast: %s", p)
-            vast.create_ssh_key(p.read_text().strip())
-            return
+def ensure_ssh_key() -> Path:
+    """Resolve a local private key whose pubkey is registered with vast.ai.
+
+    Returns the private key path so the workflow can pin it on every ssh probe
+    (`-i <key> -o IdentitiesOnly=yes`). This avoids relying on OpenSSH default
+    identity discovery, which silently breaks when the user's agent has more
+    keys than sshd's MaxAuthTries (usually 6) before the registered one.
+
+    If vast has no keys yet, register the first available local default and return its private key.
+    """
+    local = _local_keypairs()
+    registered = vast.show_ssh_keys()
+    registered_ids = {_pubkey_id(k.get("public_key", "")) for k in registered}
+
+    for priv, _pub, pub_id in local:
+        if pub_id in registered_ids:
+            log.debug("using local ssh key %s (matches vast registration)", priv)
+            return priv
+
+    if not registered and local:
+        priv, pub, _ = local[0]
+        log.info("registering local ssh key with vast: %s", pub)
+        vast.create_ssh_key(pub.read_text().strip())
+        return priv
+
+    if registered and not local:
+        raise RuntimeError(
+            f"vast.ai has {len(registered)} ssh key(s) registered but no matching local "
+            f"private key was found at {[str(p.with_suffix('')) for p in DEFAULT_PUBKEY_PATHS]}. "
+            "Generate the matching private key locally, or add one with `ssh-keygen -t ed25519`."
+        )
+    if registered and local:
+        raise RuntimeError(
+            "None of the ssh keys registered with vast.ai match a local private key. "
+            f"Local pubkeys checked: {[str(p) for _, p, _ in local]}. "
+            "Either register a matching pubkey via `vastai create ssh-key` or "
+            "remove stale keys at https://cloud.vast.ai/manage-keys/."
+        )
     raise RuntimeError(
-        "No SSH key registered with vast.ai and no ~/.ssh/id_ed25519.pub or id_rsa.pub found locally. "
+        "No SSH key registered with vast.ai and no ~/.ssh/id_ed25519 or id_rsa found locally. "
         "Generate one with `ssh-keygen -t ed25519` or pre-register via `vastai create ssh-key`."
     )

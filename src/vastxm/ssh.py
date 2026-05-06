@@ -23,6 +23,18 @@ class SshTarget:
     user: str
     host: str
     port: int
+    # Pinning the private key (with IdentitiesOnly) avoids two pitfalls:
+    # (a) sshd's MaxAuthTries=6 cutting us off when an agent has many keys
+    # before the registered one, (b) ambiguity about which default identity
+    # OpenSSH picks across environments. Set when the workflow has resolved
+    # the local key matching the user's vast.ai-registered pubkey.
+    identity: Path | None = None
+
+
+def _identity_opts(target: SshTarget) -> list[str]:
+    if target.identity is None:
+        return []
+    return ["-i", str(target.identity), "-o", "IdentitiesOnly=yes"]
 
 
 def probe(target: SshTarget, remote_cmd: str, *, connect_timeout: int = 5) -> tuple[int, str]:
@@ -30,6 +42,7 @@ def probe(target: SshTarget, remote_cmd: str, *, connect_timeout: int = 5) -> tu
     argv = [
         "ssh", "-p", str(target.port),
         *SSH_COMMON_OPTS,
+        *_identity_opts(target),
         "-o", f"ConnectTimeout={connect_timeout}",
         "-o", "BatchMode=yes",
         f"{target.user}@{target.host}",
@@ -44,10 +57,53 @@ def _ssh_argv(target: SshTarget, remote_cmd: str) -> list[str]:
         "ssh",
         "-p", str(target.port),
         *SSH_COMMON_OPTS,
+        *_identity_opts(target),
         "-o", "ServerAliveInterval=30",
         f"{target.user}@{target.host}",
         "bash", "-lc", remote_cmd,
     ]
+
+
+def scp_upload(target: SshTarget, local_path: Path, remote_path: str) -> None:
+    """Copy a local file to remote_path via scp, reusing the target's pinned identity.
+
+    We avoid `vastai copy` because it rsyncs to a host-level account
+    (vastai_kaalia@<host>:22) whose auth isn't tied to the SSH key vast.ai
+    registers inside the *container*. The direct SSH target already has the
+    right user, port, and key — scp through that.
+    """
+    argv = [
+        "scp",
+        "-P", str(target.port),
+        *SSH_COMMON_OPTS,
+        *_identity_opts(target),
+        str(local_path),
+        f"{target.user}@{target.host}:{remote_path}",
+    ]
+    proc = subprocess.run(argv, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"scp upload {local_path} -> {target.host}:{remote_path} failed "
+            f"(rc={proc.returncode}): {proc.stderr.strip()}"
+        )
+
+
+def scp_download(target: SshTarget, remote_path: str, local_path: Path) -> None:
+    """Recursively copy remote_path to local_path via scp (works for files too)."""
+    argv = [
+        "scp", "-r",
+        "-P", str(target.port),
+        *SSH_COMMON_OPTS,
+        *_identity_opts(target),
+        f"{target.user}@{target.host}:{remote_path}",
+        str(local_path),
+    ]
+    proc = subprocess.run(argv, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"scp download {target.host}:{remote_path} -> {local_path} failed "
+            f"(rc={proc.returncode}): {proc.stderr.strip()}"
+        )
 
 
 def run_remote_streaming(

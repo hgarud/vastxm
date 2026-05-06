@@ -91,7 +91,11 @@ def _run(args: list[str], *, raw: bool = True, check: bool = True) -> str:
     if raw and "--raw" not in cmd:
         cmd.append("--raw")
     log.debug("running: %s", " ".join(cmd))
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    # stdin=DEVNULL: vastai's destroy/etc. commands call input() for confirmation
+    # when stdout is captured the prompt is invisible, so without DEVNULL the
+    # subprocess hangs forever waiting on the user's TTY. Pair with `-y` flags
+    # where applicable, but DEVNULL is the belt-and-suspenders fallback.
+    proc = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if check and proc.returncode != 0:
         raise VastError(
             f"vastai {' '.join(args)} failed (exit {proc.returncode}):\n"
@@ -155,7 +159,9 @@ def create_instance(
 
 
 def destroy_instance(instance_id: int) -> None:
-    _run(["destroy", "instance", str(instance_id)], raw=False)
+    # `-y` skips vastai's interactive confirmation prompt, which would otherwise
+    # hang the subprocess (capture_output hides the prompt from the user).
+    _run(["destroy", "instance", str(instance_id), "-y"], raw=False)
 
 
 def copy(src: str, dst: str) -> None:

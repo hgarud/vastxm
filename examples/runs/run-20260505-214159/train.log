@@ -1,0 +1,98 @@
+BASH=/usr/bin/bash
+BASHOPTS=checkwinsize:cmdhist:complete_fullquote:extquote:force_fignore:globasciiranges:globskipdots:hostcomplete:interactive_comments:login_shell:patsub_replacement:progcomp:promptvars:sourcepath
+BASH_ALIASES=()
+BASH_ARGC=([0]="1")
+BASH_ARGV=([0]="pipefail")
+BASH_CMDS=()
+BASH_EXECUTION_STRING=set
+BASH_LINENO=()
+BASH_LOADABLES_PATH=/usr/local/lib/bash:/usr/lib/bash:/opt/local/lib/bash:/usr/pkg/lib/bash:/opt/pkg/lib/bash:.
+BASH_SOURCE=()
+BASH_VERSINFO=([0]="5" [1]="2" [2]="21" [3]="1" [4]="release" [5]="x86_64-pc-linux-gnu")
+BASH_VERSION='5.2.21(1)-release'
+CUDA_VERSION=12.8.1
+DATA_DIRECTORY=/workspace
+DEBIAN_FRONTEND=noninteractive
+DEBUGINFOD_URLS='https://debuginfod.ubuntu.com '
+DIRSTACK=()
+EUID=0
+GROUPS=()
+HOME=/root
+HOSTNAME=606d6e4e2f46
+HOSTTYPE=x86_64
+IFS=$' \t\n'
+IMAGE_TYPE=vast
+LANG=C.UTF-8
+LD_LIBRARY_PATH=/usr/local/cuda/lib64
+LIBRARY_PATH=/usr/local/cuda/lib64/stubs
+LOGNAME=root
+MACHTYPE=x86_64-pc-linux-gnu
+NCCL_VERSION=2.25.1-1
+NVARCH=x86_64
+NVIDIA_DRIVER_CAPABILITIES=all
+NVIDIA_PRODUCT_NAME=CUDA
+NVIDIA_REQUIRE_CUDA='cuda>=12.8 brand=unknown,driver>=470,driver<471 brand=grid,driver>=470,driver<471 brand=tesla,driver>=470,driver<471 brand=nvidia,driver>=470,driver<471 brand=quadro,driver>=470,driver<471 brand=quadrortx,driver>=470,driver<471 brand=nvidiartx,driver>=470,driver<471 brand=vapps,driver>=470,driver<471 brand=vpc,driver>=470,driver<471 brand=vcs,driver>=470,driver<471 brand=vws,driver>=470,driver<471 brand=cloudgaming,driver>=470,driver<471 brand=unknown,driver>=535,driver<536 brand=grid,driver>=535,driver<536 brand=tesla,driver>=535,driver<536 brand=nvidia,driver>=535,driver<536 brand=quadro,driver>=535,driver<536 brand=quadrortx,driver>=535,driver<536 brand=nvidiartx,driver>=535,driver<536 brand=vapps,driver>=535,driver<536 brand=vpc,driver>=535,driver<536 brand=vcs,driver>=535,driver<536 brand=vws,driver>=535,driver<536 brand=cloudgaming,driver>=535,driver<536 brand=unknown,driver>=550,driver<551 brand=grid,driver>=550,driver<551 brand=tesla,driver>=550,driver<551 brand=nvidia,driver>=550,driver<551 brand=quadro,driver>=550,driver<551 brand=quadrortx,driver>=550,driver<551 brand=nvidiartx,driver>=550,driver<551 brand=vapps,driver>=550,driver<551 brand=vpc,driver>=550,driver<551 brand=vcs,driver>=550,driver<551 brand=vws,driver>=550,driver<551 brand=cloudgaming,driver>=550,driver<551 brand=unknown,driver>=560,driver<561 brand=grid,driver>=560,driver<561 brand=tesla,driver>=560,driver<561 brand=nvidia,driver>=560,driver<561 brand=quadro,driver>=560,driver<561 brand=quadrortx,driver>=560,driver<561 brand=nvidiartx,driver>=560,driver<561 brand=vapps,driver>=560,driver<561 brand=vpc,driver>=560,driver<561 brand=vcs,driver>=560,driver<561 brand=vws,driver>=560,driver<561 brand=cloudgaming,driver>=560,driver<561 brand=unknown,driver>=565,driver<566 brand=grid,driver>=565,driver<566 brand=tesla,driver>=565,driver<566 brand=nvidia,driver>=565,driver<566 brand=quadro,driver>=565,driver<566 brand=quadrortx,driver>=565,driver<566 brand=nvidiartx,driver>=565,driver<566 brand=vapps,driver>=565,driver<566 brand=vpc,driver>=565,driver<566 brand=vcs,driver>=565,driver<566 brand=vws,driver>=565,driver<566 brand=cloudgaming,driver>=565,driver<566'
+NVIDIA_VISIBLE_DEVICES=all
+NV_CUDA_CUDART_DEV_VERSION=12.8.90-1
+NV_CUDA_CUDART_VERSION=12.8.90-1
+NV_CUDA_LIB_VERSION=12.8.1-1
+NV_CUDA_NSIGHT_COMPUTE_DEV_PACKAGE=cuda-nsight-compute-12-8=12.8.1-1
+NV_CUDA_NSIGHT_COMPUTE_VERSION=12.8.1-1
+NV_CUDNN_PACKAGE=libcudnn9-cuda-12=9.8.0.87-1
+NV_CUDNN_PACKAGE_DEV=libcudnn9-dev-cuda-12=9.8.0.87-1
+NV_CUDNN_PACKAGE_NAME=libcudnn9-cuda-12
+NV_CUDNN_VERSION=9.8.0.87-1
+NV_LIBCUBLAS_DEV_PACKAGE=libcublas-dev-12-8=12.8.4.1-1
+NV_LIBCUBLAS_DEV_PACKAGE_NAME=libcublas-dev-12-8
+NV_LIBCUBLAS_DEV_VERSION=12.8.4.1-1
+NV_LIBCUBLAS_PACKAGE=libcublas-12-8=12.8.4.1-1
+NV_LIBCUBLAS_PACKAGE_NAME=libcublas-12-8
+NV_LIBCUBLAS_VERSION=12.8.4.1-1
+NV_LIBCUSPARSE_DEV_VERSION=12.5.8.93-1
+NV_LIBCUSPARSE_VERSION=12.5.8.93-1
+NV_LIBNCCL_DEV_PACKAGE=libnccl-dev=2.25.1-1+cuda12.8
+NV_LIBNCCL_DEV_PACKAGE_NAME=libnccl-dev
+NV_LIBNCCL_DEV_PACKAGE_VERSION=2.25.1-1
+NV_LIBNCCL_PACKAGE=libnccl2=2.25.1-1+cuda12.8
+NV_LIBNCCL_PACKAGE_NAME=libnccl2
+NV_LIBNCCL_PACKAGE_VERSION=2.25.1-1
+NV_LIBNPP_DEV_PACKAGE=libnpp-dev-12-8=12.3.3.100-1
+NV_LIBNPP_DEV_VERSION=12.3.3.100-1
+NV_LIBNPP_PACKAGE=libnpp-12-8=12.3.3.100-1
+NV_LIBNPP_VERSION=12.3.3.100-1
+NV_NVML_DEV_VERSION=12.8.90-1
+NV_NVPROF_DEV_PACKAGE=cuda-nvprof-12-8=12.8.90-1
+NV_NVPROF_VERSION=12.8.90-1
+NV_NVTX_VERSION=12.8.90-1
+OPTERR=1
+OPTIND=1
+OSTYPE=linux-gnu
+PATH=/root/.local/bin:/opt/instance-tools/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PIPESTATUS=([0]="0")
+PIP_BREAK_SYSTEM_PACKAGES=1
+PPID=790
+PS4='+ '
+PWD=/root
+PYTHONUNBUFFERED=1
+PYTHON_VERSION=3.12
+SHELL=/bin/bash
+SHELLOPTS=braceexpand:hashall:interactive-comments
+SHLVL=3
+SSH_CLIENT='98.248.225.101 50649 22'
+SSH_CONNECTION='98.248.225.101 50649 172.17.0.6 22'
+TCLLIBPATH=/usr/lib/tcltk/default
+TERM=dumb
+UID=0
+USER=root
+UV_CACHE_DIR=/.uv/cache
+UV_LINK_MODE=copy
+UV_NO_CACHE=1
+UV_PYTHON_BIN_DIR=/.uv/python_bin
+UV_PYTHON_INSTALL_DIR=/.uv/python_install
+WORKSPACE=/workspace
+_=/root/.local/bin/env
+Using CPython 3.12.3 interpreter at: /usr/bin/python3.12
+Creating virtual environment at: .venv
+Resolved 1 package in 3ms
+Checked in 0.00ms
+Hello from test-env!

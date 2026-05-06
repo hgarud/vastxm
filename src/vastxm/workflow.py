@@ -4,6 +4,7 @@ from pathlib import Path
 from vastxm import bundle, instance, ssh, vast
 from vastxm._log import get_logger
 from vastxm.config import LaunchConfig
+from vastxm.ssh import SshTarget
 
 log = get_logger(__name__)
 
@@ -72,7 +73,7 @@ def launch(cfg: LaunchConfig) -> int:
 
     bundle_path = bundle.create_bundle(bundle_root, excludes=cfg.exclude)
 
-    instance.ensure_ssh_key()
+    identity = instance.ensure_ssh_key()
     offer = instance.pick_offer(cfg)
     offer_id = int(offer["id"])
     image = instance.resolve_image(cfg.image, offer)
@@ -94,17 +95,18 @@ def launch(cfg: LaunchConfig) -> int:
     log.info("created instance %s", instance_id)
 
     rc = 1
+    target: SshTarget | None = None
     try:
         instance.wait_for_running(instance_id)
 
-        target = instance.resolve_ssh_target(instance_id)
+        target = instance.resolve_ssh_target(instance_id, identity=identity)
         log.info("waiting for sshd on %s:%s...", target.host, target.port)
         instance.wait_for_ssh(target, instance_id=instance_id)
         log.info("waiting for onstart_cmd to finish (uv install)...")
         instance.wait_for_onstart(target)
 
         log.info("uploading bundle (%d KB)...", bundle_path.stat().st_size // 1024)
-        vast.copy(f"local:{bundle_path}", f"{instance_id}:/workspace/bundle.tar.gz")
+        ssh.scp_upload(target, bundle_path, "/workspace/bundle.tar.gz")
 
         log_file = Path(cfg.artifact_dest) / run_name / "train.log"
         rc = ssh.run_remote_streaming(
@@ -114,19 +116,27 @@ def launch(cfg: LaunchConfig) -> int:
         )
         log.info("remote command exited with rc=%s", rc)
     finally:
-        _cleanup(instance_id, cfg, run_name)
+        _cleanup(instance_id, cfg, run_name, target)
     return rc
 
 
-def _cleanup(instance_id: int, cfg: LaunchConfig, run_name: str) -> None:
+def _cleanup(
+    instance_id: int,
+    cfg: LaunchConfig,
+    run_name: str,
+    target: SshTarget | None,
+) -> None:
     """Best-effort artifact pull, then destroy unless --keep."""
     artifact_local = Path(cfg.artifact_dest) / run_name
     artifact_local.mkdir(parents=True, exist_ok=True)
-    try:
-        log.info("pulling artifacts %s -> %s", cfg.artifact_path, artifact_local)
-        vast.copy(f"{instance_id}:{cfg.artifact_path}", f"local:{artifact_local}/")
-    except Exception as e:  # noqa: BLE001 — never let cleanup mask the original failure
-        log.warning("artifact pull failed: %s", e)
+    if target is None:
+        log.warning("no ssh target resolved; skipping artifact pull")
+    else:
+        try:
+            log.info("pulling artifacts %s -> %s", cfg.artifact_path, artifact_local)
+            ssh.scp_download(target, cfg.artifact_path, artifact_local)
+        except Exception as e:  # noqa: BLE001 — never let cleanup mask the original failure
+            log.warning("artifact pull failed: %s", e)
 
     if cfg.keep:
         log.info("--keep set; instance %s is still running. Stop with `vastxm stop %s`.", instance_id, instance_id)

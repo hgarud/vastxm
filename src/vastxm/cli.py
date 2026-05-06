@@ -8,7 +8,7 @@ from typing import NoReturn
 from rich.console import Console
 from rich.table import Table
 
-from vastxm import instance, vast
+from vastxm import instance, ssh as ssh_mod, vast
 from vastxm._log import get_logger
 from vastxm.config import LaunchConfig, merge_config
 from vastxm.ssh import SSH_COMMON_OPTS, run_remote_streaming
@@ -58,7 +58,7 @@ def _build_parser() -> argparse.ArgumentParser:
     pst.add_argument("instance_id", type=int)
 
     # pull
-    pp = sub.add_parser("pull", help="vastai copy from instance to local.")
+    pp = sub.add_parser("pull", help="scp from instance to local via direct SSH.")
     pp.add_argument("instance_id", type=int)
     pp.add_argument("remote_path")
     pp.add_argument("local_path")
@@ -131,7 +131,9 @@ def _cmd_stop(args: argparse.Namespace) -> int:
 
 
 def _cmd_pull(args: argparse.Namespace) -> int:
-    vast.copy(f"{args.instance_id}:{args.remote_path}", f"local:{args.local_path}")
+    identity = instance.ensure_ssh_key()
+    target = instance.resolve_ssh_target(args.instance_id, identity=identity)
+    ssh_mod.scp_download(target, args.remote_path, Path(args.local_path))
     return 0
 
 
